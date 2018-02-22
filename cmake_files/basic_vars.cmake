@@ -55,6 +55,9 @@ set(CTWMSRC
 	parse.c
 	parse_be.c
 	parse_yacc.c
+	r_area.c
+	r_area_list.c
+	r_layout.c
 	session.c
 	util.c
 	vscreen.c

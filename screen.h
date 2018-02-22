@@ -21,6 +21,7 @@
 
 #include "menus.h"  // embedded MouseButton/Func{Button,Key}
 #include "workspace_structs.h"  // embedded ScreenInfo.workSpaceMgr
+#include "r_layout.h"
 
 
 /**
@@ -204,6 +205,8 @@ struct ScreenInfo {
 	Window RealRoot;
 	/// @}
 
+	RLayout *Layout;
+	RLayout *BorderedLayout;
 
 	/**
 	 * Dimensions/coordinates window.  This is the small window (usually

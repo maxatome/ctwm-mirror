@@ -14,6 +14,7 @@
 #include "drawing.h"
 #include "events.h"
 #include "icons.h"
+#include "r_area.h"
 #include "screen.h"
 #include "util.h"
 #include "win_decorations.h"
@@ -460,17 +461,87 @@ DisplayPosition(const TwmWindow *_unused_tmp_win, int x, int y)
  *
  * XXX In desperate need of better commenting.
  */
+static void
+_tryToPack(int winw, int winh, RArea *cur_win, int *x, int *y)
+{
+	if(*x >= cur_win->x + cur_win->width) {
+		return;
+	}
+	if(*y >= cur_win->y + cur_win->height) {
+		return;
+	}
+	if(*x + winw <= cur_win->x) {
+		return;
+	}
+	if(*y + winh <= cur_win->y) {
+		return;
+	}
+
+	if(*x + Scr->MovePackResistance > cur_win->x + cur_win->width) {  /* left */
+		*x = MAX(*x, cur_win->x + cur_win->width);
+		return;
+	}
+	if(*x + winw < cur_win->x + Scr->MovePackResistance) {  /* right */
+		*x = MIN(*x, cur_win->x - winw);
+		return;
+	}
+	if(*y + Scr->MovePackResistance > cur_win->y + cur_win->height) {  /* top */
+		*y = MAX(*y, cur_win->y + cur_win->height);
+		return;
+	}
+	if(*y + winh < cur_win->y + Scr->MovePackResistance) {  /* bottom */
+		*y = MIN(*y, cur_win->y - winh);
+	}
+}
+
 void
 TryToPack(TwmWindow *tmp_win, int *x, int *y)
 {
 	TwmWindow   *t;
-	int         newx, newy;
-	int         w, h;
-	int         winw = tmp_win->frame_width  + 2 * tmp_win->frame_bw;
-	int         winh = tmp_win->frame_height + 2 * tmp_win->frame_bw;
+	RArea cur_win;
+	const int winw = tmp_win->frame_width  + 2 * tmp_win->frame_bw;
+	const int winh = tmp_win->frame_height + 2 * tmp_win->frame_bw;
 
-	newx = *x;
-	newy = *y;
+	/* Global layout is not a single rectangle, check against the
+	 * monitor borders */
+	if(Scr->BorderedLayout->horiz->len > 1) {
+		RArea area;
+		int monitor_bot, monitor_top, monitor_left, monitor_right;
+
+		RAreaNewIn(tmp_win->frame_x, tmp_win->frame_y, winw, winh, &area);
+		monitor_bot = RLayoutFindMonitorBottomEdge(Scr->BorderedLayout, &area);
+		monitor_top = RLayoutFindMonitorTopEdge(Scr->BorderedLayout, &area);
+		monitor_left = RLayoutFindMonitorLeftEdge(Scr->BorderedLayout, &area);
+		monitor_right = RLayoutFindMonitorRightEdge(Scr->BorderedLayout, &area);
+		printf("TryToPack monitor: left=%d top=%d right=%d bot=%d\n",
+		       monitor_left, monitor_top, monitor_right, monitor_bot);
+
+		// Left border
+		RAreaNewIn(monitor_left - 1, monitor_top,
+		           1, monitor_bot - monitor_top + 1,
+		           &cur_win);
+		_tryToPack(winw, winh, &cur_win, x, y);
+
+		// Right border
+		RAreaNewIn(monitor_right + 1, monitor_top,
+		           1, monitor_bot - monitor_top + 1,
+		           &cur_win);
+		_tryToPack(winw, winh, &cur_win, x, y);
+
+		// Top border
+		RAreaNewIn(monitor_left, monitor_top - 1,
+		           monitor_right - monitor_left + 1, 1, &cur_win);
+		_tryToPack(winw, winh, &cur_win, x, y);
+
+		// Bottom border
+		RAreaNewIn(monitor_left, monitor_bot + 1,
+		           monitor_right - monitor_left + 1, 1, &cur_win);
+		_tryToPack(winw, winh, &cur_win, x, y);
+
+		printf("TryToPack: x=%d y=%d w=%d h=%d (bw=%d)\n", *x, *y, winw, winh,
+		       tmp_win->frame_bw);
+	}
+
 	for(t = Scr->FirstWindow; t != NULL; t = t->next) {
 		if(t == tmp_win) {
 			continue;
@@ -485,40 +556,14 @@ TryToPack(TwmWindow *tmp_win, int *x, int *y)
 			continue;
 		}
 
-		w = t->frame_width  + 2 * t->frame_bw;
-		h = t->frame_height + 2 * t->frame_bw;
-		if(newx >= t->frame_x + w) {
-			continue;
-		}
-		if(newy >= t->frame_y + h) {
-			continue;
-		}
-		if(newx + winw <= t->frame_x) {
-			continue;
-		}
-		if(newy + winh <= t->frame_y) {
-			continue;
-		}
+		RAreaNewIn(t->frame_x, t->frame_y,
+		           t->frame_width  + 2 * t->frame_bw,
+		           t->frame_height + 2 * t->frame_bw,
+		           &cur_win);
 
-		if(newx + Scr->MovePackResistance > t->frame_x + w) {  /* left */
-			newx = MAX(newx, t->frame_x + w);
-			continue;
-		}
-		if(newx + winw < t->frame_x + Scr->MovePackResistance) {  /* right */
-			newx = MIN(newx, t->frame_x - winw);
-			continue;
-		}
-		if(newy + Scr->MovePackResistance > t->frame_y + h) {  /* top */
-			newy = MAX(newy, t->frame_y + h);
-			continue;
-		}
-		if(newy + winh < t->frame_y + Scr->MovePackResistance) {  /* bottom */
-			newy = MIN(newy, t->frame_y - winh);
-			continue;
-		}
+		_tryToPack(winw, winh, &cur_win, x, y);
 	}
-	*x = newx;
-	*y = newy;
+	printf("=TryToPack: x=%d y=%d w=%d h=%d\n\n", *x, *y, winw, winh);
 }
 
 
@@ -674,13 +719,71 @@ TryToGrid(TwmWindow *tmp_win, int *x, int *y)
 static void ConstrainLeftTop(int *value, int border);
 static void ConstrainRightBottom(int *value, int size1, int border, int size2);
 
+bool
+ConstrainByLayout(RLayout *layout, int move_off_res, int *left, int width,
+                  int *top, int height)
+{
+	RArea area;
+	int limit;
+	bool clipped = false;
+
+	RAreaNewIn(*left, *top, width, height, &area);
+
+	limit = RLayoutFindBottomEdge(layout, &area) - height + 1;
+	if(area.y > limit) {
+		if(move_off_res >= 0 && area.y >= limit + move_off_res) {
+			area.y -= move_off_res;
+		}
+		else {
+			area.y = limit;
+			clipped = true;
+		}
+	}
+
+	limit = RLayoutFindRightEdge(layout, &area) - width + 1;
+	if(area.x > limit) {
+		if(move_off_res >= 0 && area.x >= limit + move_off_res) {
+			area.x -= move_off_res;
+		}
+		else {
+			area.x = limit;
+			clipped = true;
+		}
+	}
+
+	limit = RLayoutFindLeftEdge(layout, &area);
+	if(area.x < limit) {
+		if(move_off_res >= 0 && area.x <= limit - move_off_res) {
+			area.x += move_off_res;
+		}
+		else {
+			area.x = limit;
+			clipped = true;
+		}
+	}
+
+	limit = RLayoutFindTopEdge(layout, &area);
+	if(area.y < limit) {
+		if(move_off_res >= 0 && area.y <= limit - move_off_res) {
+			area.y += move_off_res;
+		}
+		else {
+			area.y = limit;
+			clipped = true;
+		}
+	}
+
+	*left = area.x;
+	*top = area.y;
+
+	return clipped;
+}
+
 void
 ConstrainByBorders1(int *left, int width, int *top, int height)
 {
-	ConstrainRightBottom(left, width, Scr->BorderRight, Scr->rootw);
-	ConstrainLeftTop(left, Scr->BorderLeft);
-	ConstrainRightBottom(top, height, Scr->BorderBottom, Scr->rooth);
-	ConstrainLeftTop(top, Scr->BorderTop);
+	ConstrainByLayout(Scr->BorderedLayout, Scr->MoveOffResistance,
+	                  left, width, top, height);
 }
 
 void

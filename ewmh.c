@@ -1830,10 +1830,10 @@ bool EwmhOnWindowRing(TwmWindow *twm_win)
 	}
 }
 
-static inline int max(int a, int b)
-{
-	return a > b ? a : b;
-}
+// static inline int max(int a, int b)
+// {
+//      return a > b ? a : b;
+// }
 
 /*
  * Recalculate the effective border values from the remembered struts.
@@ -1862,6 +1862,13 @@ static void EwmhRecalculateStrut(void)
 	Scr->BorderRight  = right;
 	Scr->BorderTop    = top;
 	Scr->BorderBottom = bottom;
+
+	// Bordered layout may have changed
+	Scr->BorderedLayout = RLayoutCopyCropped(Scr->Layout,
+	                      left, right, top, bottom);
+	if(Scr->BorderedLayout == NULL) {
+		Scr->BorderedLayout = Scr->Layout;        // nothing to crop
+	}
 
 	EwmhSet_NET_WORKAREA(Scr);
 }

@@ -47,6 +47,7 @@
 #include "occupation.h"
 #include "otp.h"
 #include "parse.h"
+#include "r_area.h"
 #include "screen.h"
 #include "session.h"
 #include "util.h"
@@ -1069,8 +1070,8 @@ AddWindow(Window w, AWType wtype, IconMgr *iconp, VirtualScreen *vs)
 			 * The TryTo*() and DoResize() calls below rely on having
 			 * frame_{width,height} set, so set them.
 			 */
-			tmp_win->frame_width  = AddingW;
-			tmp_win->frame_height = AddingH;
+			tmp_win->frame_width  = AddingW - bw2;
+			tmp_win->frame_height = AddingH - bw2;
 			/*SetFocus (NULL, CurrentTime);*/
 			while(1) {
 				if(Scr->OpenWindowTimeout) {
@@ -1239,18 +1240,23 @@ AddWindow(Window w, AWType wtype, IconMgr *iconp, VirtualScreen *vs)
 					}
 				}
 				else if(event.xbutton.button == Button3) {
-					int maxw = Scr->rootw - Scr->BorderRight  - AddingX - bw2;
-					int maxh = Scr->rooth - Scr->BorderBottom - AddingY - bw2;
+					RArea area;
+					int max_bottom, max_right;
+
+					RAreaNewIn(AddingX, AddingY, AddingW, AddingH, &area);
+
+					max_bottom = RLayoutFindMonitorBottomEdge(Scr->BorderedLayout, &area) - bw2;
+					max_right = RLayoutFindMonitorRightEdge(Scr->BorderedLayout, &area) - bw2;
 
 					/*
 					 * Make window go to bottom of screen, and clip to right edge.
 					 * This is useful when popping up large windows and fixed
 					 * column text windows.
 					 */
-					if(AddingW > maxw) {
-						AddingW = maxw;
+					if(AddingX + AddingW - 1 > max_right) {
+						AddingW = max_right - AddingX + 1;
 					}
-					AddingH = maxh;
+					AddingH = max_bottom - AddingY + 1;
 
 					ConstrainSize(tmp_win, &AddingW, &AddingH);   /* w/o borders */
 					AddingW += bw2;
@@ -1466,12 +1472,26 @@ AddWindow(Window w, AWType wtype, IconMgr *iconp, VirtualScreen *vs)
 		}
 
 		/* No matter what, make sure SOME part of the window is on-screen */
-		if((tmp_win->frame_x > Scr->rootw) ||
-		                (tmp_win->frame_y > Scr->rooth) ||
-		                ((int)(tmp_win->frame_x + tmp_win->frame_width)  < 0) ||
-		                ((int)(tmp_win->frame_y + tmp_win->frame_height) < 0)) {
-			tmp_win->frame_x = 0;
-			tmp_win->frame_y = 0;
+		{
+			RArea area;
+			int min_x, min_y, max_bottom, max_right;
+
+			RAreaNewIn(tmp_win->frame_x, tmp_win->frame_y,
+			           (int)tmp_win->frame_width,
+			           (int)tmp_win->frame_height,
+			           &area);
+
+			RLayoutFindTopBottomEdges(Scr->BorderedLayout, &area,
+			                          &min_x, &max_bottom);
+			RLayoutFindLeftRightEdges(Scr->BorderedLayout, &area,
+			                          &min_y, &max_right);
+
+			if(area.x > max_right || area.y > max_bottom ||
+			                area.x + area.width <= min_x ||
+			                area.y + area.height <= min_y) {
+				tmp_win->frame_x = min_x;
+				tmp_win->frame_y = min_y;
+			}
 		}
 
 		/* May need adjusting for vscreens too */
