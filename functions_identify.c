@@ -101,7 +101,7 @@ Identify(TwmWindow *t)
 	}
 
 	ctopts = ctopts_string(", ");
-	snprintf(Info[n++], INFO_SIZE, "Compile time options : %s", ctopts);
+	snprintf(Info[n++], INFO_SIZE, "Compile time options:  %s", ctopts);
 	free(ctopts);
 	CHKN;
 
@@ -110,7 +110,8 @@ Identify(TwmWindow *t)
 
 	if(t) {
 		XGetGeometry(dpy, t->w, &JunkRoot, &JunkX, &JunkY,
-		             &wwidth, &wheight, &bw, &depth);
+		             &wwidth, &wheight, &JunkBW, &depth);
+		bw = t->frame_bw;
 		XTranslateCoordinates(dpy, t->w, Scr->Root, 0, 0,
 		                      &x, &y, &junk);
 		snprintf(Info[n++], INFO_SIZE, "Name               = \"%s\"",
